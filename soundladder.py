@@ -177,33 +177,61 @@ def midi_note_to_frequency(midi_note):
     return 440.0 * (2.0 ** ((midi_note - 69.0) / 12.0))
 
 # Function to generate sound files
-def generate_sounds(input_file, output_dir, target_start_note=60):  # MIDI note 60 = middle C
-    """Generate pitch-shifted sounds starting from a standard pitch (middle C)."""
+def generate_sounds(input_file, output_dir):
+    """Generate pitch-shifted sounds with user-defined settings."""
     try:
+        # Get all values
+        try:
+            start_pitch = float(start_pitch_var.get())
+            pitch_increment = float(pitch_increment_var.get())
+            num_files = int(num_files_var.get())
+            output_format = output_format_var.get()
+            if num_files < 1:
+                raise ValueError("Number of files must be at least 1")
+        except ValueError as e:
+            logger.error(f"Invalid values: {str(e)}")
+            messagebox.showerror("Error", f"Please enter valid numbers: {str(e)}")
+            return
+            
         # Detect input pitch
         input_freq = detect_pitch(input_file)
         input_note = frequency_to_midi_note(input_freq)
-        
-        # Calculate semitones needed to reach target pitch
-        semitone_adjustment = target_start_note - input_note
+        semitone_adjustment = start_pitch - input_note
         
         logger.debug(f"Input frequency: {input_freq:.2f} Hz")
         logger.debug(f"Input MIDI note: {input_note:.1f}")
         logger.debug(f"Adjustment needed: {semitone_adjustment:.1f} semitones")
+        logger.debug(f"Pitch increment: {pitch_increment} semitones")
+        logger.debug(f"Number of files: {num_files}")
+        logger.debug(f"Output format: {output_format}")
         
         sound = AudioSegment.from_file(input_file)
         os.makedirs(output_dir, exist_ok=True)
 
-        # Generate sound bites with 0.5 semitone increments
-        for i in range(100):
-            semitone_increase = (i * 0.5) + semitone_adjustment  # Halved the increment
+        # Generate sound bites
+        for i in range(num_files):
+            semitone_increase = (i * pitch_increment) + semitone_adjustment
             new_sound = change_pitch(sound, semitone_increase)
-            output_file = os.path.join(output_dir, f"sound_{i+1:03d}.wav")
-            new_sound.export(output_file, format="wav")
+            output_file = os.path.join(output_dir, f"sound_{i+1:03d}.{output_format}")
+            
+            # Export with format-specific settings
+            if output_format == "mp3":
+                new_sound.export(
+                    output_file, 
+                    format="mp3",
+                    bitrate="192k",  # Good quality MP3
+                    tags={  # Add metadata
+                        'title': f'Sound {i+1}',
+                        'artist': 'Sound Ladder Generator',
+                        'pitch_shift': f'{semitone_increase:.1f} semitones'
+                    }
+                )
+            else:  # WAV
+                new_sound.export(output_file, format="wav")
             
             # Update progress
             if status_label:
-                update_status(f"Generating file {i+1} of 100...")
+                update_status(f"Generating file {i+1} of {num_files}...")
             
         return output_dir
     except Exception as e:
@@ -243,9 +271,10 @@ def generate():
         return
 
     try:
+        num_files = int(num_files_var.get())  # Get the actual number of files
         logger.debug("Attempting to read input file...")
         generate_sounds(input_file, output_dir)
-        messagebox.showinfo("Success", f"100 sound files generated in:\n{output_dir}")
+        messagebox.showinfo("Success", f"{num_files} sound files generated in:\n{output_dir}")
     except Exception as e:
         logger.error(f"Error during generation: {str(e)}", exc_info=True)
         messagebox.showerror("Error", f"An error occurred:\n{str(e)}")
@@ -341,7 +370,148 @@ def create_ui():
         **button_style
     ).grid(row=0, column=2, padx=(5, 0))
 
-    # Generate button (centered)
+    # Add number of files control
+    num_files_frame = tk.Frame(main_frame, bg='#ffffff')
+    num_files_frame.grid(row=2, column=0, sticky='ew', pady=(0, 16))
+    num_files_frame.grid_columnconfigure(1, weight=1)
+
+    tk.Label(
+        num_files_frame, 
+        text="Number of Files:", 
+        font=('Segoe UI', 11),
+        bg='#ffffff',
+        fg='#202020'
+    ).grid(row=0, column=0, sticky='w', padx=(0, 12))
+    
+    num_files_spinbox = tk.Spinbox(
+        num_files_frame,
+        from_=1,
+        to=1000,
+        increment=1,
+        textvariable=num_files_var,
+        font=('Segoe UI', 11),
+        relief='flat',
+        bg='#f5f5f5',
+        highlightthickness=1,
+        highlightbackground='#e0e0e0',
+        highlightcolor='#0067c0',
+        width=10
+    )
+    num_files_spinbox.grid(row=0, column=1, sticky='w', padx=5, ipady=8)
+
+    # Add format selection
+    format_frame = tk.Frame(main_frame, bg='#ffffff')
+    format_frame.grid(row=3, column=0, sticky='ew', pady=(0, 16))
+    format_frame.grid_columnconfigure(1, weight=1)
+
+    tk.Label(
+        format_frame, 
+        text="Output Format:", 
+        font=('Segoe UI', 11),
+        bg='#ffffff',
+        fg='#202020'
+    ).grid(row=0, column=0, sticky='w', padx=(0, 12))
+    
+    # Combobox for format selection
+    format_combo = ttk.Combobox(
+        format_frame,
+        textvariable=output_format_var,
+        values=["wav", "mp3"],
+        state="readonly",
+        font=('Segoe UI', 11),
+        width=9
+    )
+    format_combo.grid(row=0, column=1, sticky='w', padx=5, ipady=8)
+
+    # Style the combobox to match Windows 11
+    style = ttk.Style()
+    style.configure('TCombobox', 
+        background='#f5f5f5',
+        fieldbackground='#f5f5f5',
+        selectbackground='#0067c0',
+        selectforeground='white'
+    )
+
+    # Starting pitch control (moved to row 4)
+    start_pitch_frame = tk.Frame(main_frame, bg='#ffffff')
+    start_pitch_frame.grid(row=4, column=0, sticky='ew', pady=(0, 16))
+    start_pitch_frame.grid_columnconfigure(1, weight=1)
+
+    tk.Label(
+        start_pitch_frame, 
+        text="Starting Pitch (MIDI note):", 
+        font=('Segoe UI', 11),
+        bg='#ffffff',
+        fg='#202020'
+    ).grid(row=0, column=0, sticky='w', padx=(0, 12))
+    
+    start_pitch_spinbox = tk.Spinbox(
+        start_pitch_frame,
+        from_=24,  # Low C
+        to=96,     # High C
+        increment=1,
+        textvariable=start_pitch_var,
+        font=('Segoe UI', 11),
+        relief='flat',
+        bg='#f5f5f5',
+        highlightthickness=1,
+        highlightbackground='#e0e0e0',
+        highlightcolor='#0067c0',
+        width=10
+    )
+    start_pitch_spinbox.grid(row=0, column=1, sticky='w', padx=5, ipady=8)
+
+    # Pitch increment control (moved to row 5)
+    pitch_frame = tk.Frame(main_frame, bg='#ffffff')
+    pitch_frame.grid(row=5, column=0, sticky='ew', pady=(0, 16))
+    pitch_frame.grid_columnconfigure(1, weight=1)
+
+    tk.Label(
+        pitch_frame, 
+        text="Pitch Increment (semitones):", 
+        font=('Segoe UI', 11),
+        bg='#ffffff',
+        fg='#202020'
+    ).grid(row=0, column=0, sticky='w', padx=(0, 12))
+    
+    pitch_spinbox = tk.Spinbox(
+        pitch_frame,
+        from_=0.1,
+        to=2.0,
+        increment=0.1,
+        textvariable=pitch_increment_var,
+        font=('Segoe UI', 11),
+        relief='flat',
+        bg='#f5f5f5',
+        highlightthickness=1,
+        highlightbackground='#e0e0e0',
+        highlightcolor='#0067c0',
+        width=10
+    )
+    pitch_spinbox.grid(row=0, column=1, sticky='w', padx=5, ipady=8)
+
+    # Preview buttons frame (moved to row 6)
+    preview_frame = tk.Frame(main_frame, bg='#ffffff')
+    preview_frame.grid(row=6, column=0, pady=(0, 16))
+
+    preview_button_style = button_style.copy()
+    preview_button_style['bg'] = '#0078d4'  # Slightly lighter blue
+
+    tk.Button(
+        preview_frame,
+        text="Preview Lowest",
+        command=lambda: preview_pitch("lowest"),
+        **preview_button_style
+    ).grid(row=0, column=0, padx=5)
+
+    tk.Button(
+        preview_frame,
+        text="Preview Highest",
+        command=lambda: preview_pitch("highest"),
+        **preview_button_style
+    ).grid(row=0, column=1, padx=5)
+
+    # Generate button (moved to row 7)
     generate_button = tk.Button(
         main_frame,
         text="Generate Sound Bites",
@@ -355,9 +525,9 @@ def create_ui():
         cursor='hand2',
         borderwidth=0
     )
-    generate_button.grid(row=2, column=0, pady=(0, 16))
+    generate_button.grid(row=7, column=0, pady=(0, 16))
 
-    # Status label (centered)
+    # Status label (moved to row 8)
     global status_label
     status_label = tk.Label(
         main_frame, 
@@ -366,7 +536,7 @@ def create_ui():
         bg='#ffffff',
         fg='#202020'
     )
-    status_label.grid(row=3, column=0)
+    status_label.grid(row=8, column=0)
 
     # Add hover effects for buttons
     def on_enter(e):
@@ -389,6 +559,10 @@ def create_ui():
 input_file_var = tk.StringVar()
 output_dir_var = tk.StringVar()
 status_label = None
+pitch_increment_var = tk.StringVar(value="0.5")  # Default increment
+start_pitch_var = tk.StringVar(value="60")  # Default to middle C (MIDI note 60)
+num_files_var = tk.StringVar(value="100")  # Default number of files
+output_format_var = tk.StringVar(value="wav")  # Default to WAV
 
 # Create the UI
 create_ui()
@@ -417,5 +591,54 @@ def generate():
         update_status("Successfully generated 100 sound files!")
     except Exception as e:
         update_status(f"Error: {str(e)}", True)
+
+def preview_pitch(semitones):
+    """Preview the pitch-shifted sound."""
+    try:
+        input_file = input_file_var.get()
+        if not input_file or not os.path.exists(input_file):
+            messagebox.showerror("Error", "Please select an input file first")
+            return
+            
+        # Get all values
+        try:
+            start_pitch = float(start_pitch_var.get())
+            pitch_increment = float(pitch_increment_var.get())
+            num_files = int(num_files_var.get())
+            if num_files < 1:
+                raise ValueError("Number of files must be at least 1")
+        except ValueError as e:
+            messagebox.showerror("Error", f"Invalid values: {str(e)}")
+            return
+            
+        # Load and process sound
+        sound = AudioSegment.from_file(input_file)
+        input_freq = detect_pitch(input_file)
+        input_note = frequency_to_midi_note(input_freq)
+        semitone_adjustment = start_pitch - input_note
+        
+        # Calculate final adjustment
+        if semitones == "highest":
+            semitone_increase = ((num_files - 1) * pitch_increment) + semitone_adjustment
+        else:  # lowest
+            semitone_increase = semitone_adjustment
+            
+        # Generate preview
+        new_sound = change_pitch(sound, semitone_increase)
+        
+        # Play the preview (first 2 seconds)
+        preview_length = min(len(new_sound), 2000)
+        preview = new_sound[:preview_length]
+        preview.export("temp_preview.wav", format="wav")
+        
+        if sys.platform == "win32":
+            os.startfile("temp_preview.wav")
+        else:
+            opener = "open" if sys.platform == "darwin" else "xdg-open"
+            subprocess.call([opener, "temp_preview.wav"])
+            
+    except Exception as e:
+        logger.error(f"Error in preview: {str(e)}", exc_info=True)
+        messagebox.showerror("Error", f"Preview failed: {str(e)}")
 
 root.mainloop()

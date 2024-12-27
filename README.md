@@ -45,18 +45,6 @@ A Python application that generates a series of pitch-shifted audio files, usefu
 1. Download FFmpeg from [here](https://www.gyan.dev/ffmpeg/builds/)
 2. Add FFmpeg to your system PATH
 
-### macOS
-
-```bash     
-brew install ffmpeg
-```
-
-### Linux
-
-```bash
-sudo apt-get install ffmpeg
-```
-
 
 ## License
 

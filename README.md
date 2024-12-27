@@ -41,10 +41,36 @@ A Python application that generates a series of pitch-shifted audio files, usefu
 
 ## Installing FFmpeg
 
-### Windows
+#### Windows
 1. Download FFmpeg from [here](https://www.gyan.dev/ffmpeg/builds/)
-2. Add FFmpeg to your system PATH
+2. Extract the downloaded file
+3. Move the contents of the `bin` folder to `C:\Program Files\ffmpeg`
+4. Add to System PATH:
+   - Open "System Properties" (Windows key + X → System)
+   - Click "Advanced system settings"
+   - Click "Environment Variables"
+   - Under "System variables", select "Path"
+   - Click "Edit" → "New"
+   - Add `C:\Program Files\ffmpeg`
+   - Click "OK" on all windows
 
+#### macOS
+Run in terminal:
+`brew install ffmpeg`
+
+#### Linux
+Run in terminal:
+`sudo apt-get install ffmpeg`
+
+### Running the Program
+1. Download the latest release
+2. Run the application:
+   `python soundladder.py`
+3. Using the interface:
+   - Click "Browse" to select your input audio file
+   - Choose an output directory
+   - Click "Generate Sound Bites"
+   - Wait for the success message
 
 ## License
 

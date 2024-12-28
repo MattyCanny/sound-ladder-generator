@@ -1,5 +1,6 @@
 import os
 import tkinter as tk
+from tkinter import ttk
 from tkinter import filedialog, messagebox
 import logging
 import subprocess
@@ -193,6 +194,9 @@ def generate_sounds(input_file, output_dir):
             messagebox.showerror("Error", f"Please enter valid numbers: {str(e)}")
             return
             
+        # Get original filename without extension
+        original_filename = os.path.splitext(os.path.basename(input_file))[0]
+        
         # Detect input pitch
         input_freq = detect_pitch(input_file)
         input_note = frequency_to_midi_note(input_freq)
@@ -204,6 +208,7 @@ def generate_sounds(input_file, output_dir):
         logger.debug(f"Pitch increment: {pitch_increment} semitones")
         logger.debug(f"Number of files: {num_files}")
         logger.debug(f"Output format: {output_format}")
+        logger.debug(f"Original filename: {original_filename}")
         
         sound = AudioSegment.from_file(input_file)
         os.makedirs(output_dir, exist_ok=True)
@@ -212,16 +217,16 @@ def generate_sounds(input_file, output_dir):
         for i in range(num_files):
             semitone_increase = (i * pitch_increment) + semitone_adjustment
             new_sound = change_pitch(sound, semitone_increase)
-            output_file = os.path.join(output_dir, f"sound_{i+1:03d}.{output_format}")
+            output_file = os.path.join(output_dir, f"{original_filename}_sound_{i+1:03d}.{output_format}")
             
             # Export with format-specific settings
             if output_format == "mp3":
                 new_sound.export(
                     output_file, 
                     format="mp3",
-                    bitrate="192k",  # Good quality MP3
-                    tags={  # Add metadata
-                        'title': f'Sound {i+1}',
+                    bitrate="192k",
+                    tags={
+                        'title': f'{original_filename} Sound {i+1}',
                         'artist': 'Sound Ladder Generator',
                         'pitch_shift': f'{semitone_increase:.1f} semitones'
                     }

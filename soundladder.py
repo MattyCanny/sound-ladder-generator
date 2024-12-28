@@ -17,6 +17,146 @@ logger = logging.getLogger(__name__)
 ffmpeg_path = r"C:\Program Files\ffmpeg\ffmpeg-2024-12-26-git-fe04b93afa-full_build\bin"
 os.environ["PATH"] += os.pathsep + ffmpeg_path
 
+# Color constants
+DARK_BG = '#1e1e1e'
+DARKER_BG = '#252526'
+TEXT_COLOR = '#ffffff'
+ACCENT_COLOR = '#0078d4'
+FIELD_BG = '#3c3c3c'
+FIELD_BORDER = '#555555'
+
+# Status types dictionary
+STATUS_TYPES = {
+    'QUEUED': {'text': 'Queued...', 'color': '#666666'},
+    'ANALYZING': {'text': 'Analyzing...', 'color': '#2b5797'},
+    'CONVERTING': {'text': 'Converting...', 'color': '#0078d4'},
+    'COMPLETED': {'text': 'Completed', 'color': '#107c10'},
+    'ERROR': {'text': 'Error', 'color': '#c42b1c'},
+    'CANCELLED': {'text': 'Cancelled', 'color': '#ca5010'}
+}
+
+# Style dictionaries
+button_style = {
+    'bg': ACCENT_COLOR,
+    'fg': TEXT_COLOR,
+    'relief': 'flat',
+    'padx': 16,
+    'pady': 6,
+    'cursor': 'hand2',
+    'borderwidth': 0,
+    'highlightthickness': 0
+}
+
+# Create separate styles for regular and large buttons
+regular_button_style = {
+    **button_style,
+    'font': ('Segoe UI', 10)
+}
+
+large_button_style = {
+    **button_style,
+    'font': ('Segoe UI', 11, 'bold'),
+    'padx': 32,
+    'pady': 8
+}
+
+entry_style = {
+    'font': ('Segoe UI', 11),
+    'bg': FIELD_BG,
+    'fg': TEXT_COLOR,
+    'relief': 'flat',
+    'highlightthickness': 0,
+    'insertbackground': TEXT_COLOR
+}
+
+label_style = {
+    'font': ('Segoe UI', 11),
+    'bg': DARK_BG,
+    'fg': TEXT_COLOR,
+    'anchor': 'w',
+    'padx': 10
+}
+
+# Add at the top with other variables
+PROCESSING_CANCELLED = False
+
+def create_round_rectangle(canvas, x1, y1, x2, y2, radius=25, **kwargs):
+    """Create a rounded rectangle on a canvas."""
+    points = [
+        x1 + radius, y1,
+        x2 - radius, y1,
+        x2, y1,
+        x2, y1 + radius,
+        x2, y2 - radius,
+        x2, y2,
+        x2 - radius, y2,
+        x1 + radius, y2,
+        x1, y2,
+        x1, y2 - radius,
+        x1, y1 + radius,
+        x1, y1
+    ]
+
+    return canvas.create_polygon(points, smooth=True, **kwargs)
+
+class RoundedEntry(tk.Entry):
+    """Custom Entry widget with rounded corners"""
+    def __init__(self, master=None, **kwargs):
+        self.frame = tk.Frame(master, bg=DARK_BG)
+        self.frame.pack(fill='x', padx=2, pady=2)
+        
+        tk.Entry.__init__(self, self.frame, **kwargs)
+        self.configure(
+            bd=0,
+            bg=FIELD_BG,
+            fg=TEXT_COLOR,
+            insertbackground=TEXT_COLOR,
+            highlightthickness=0,
+            font=('Segoe UI', 11)
+        )
+        self.pack(fill='x', ipady=6)
+
+class RoundedSpinbox(tk.Spinbox):
+    """Custom Spinbox widget with rounded corners"""
+    def __init__(self, master=None, **kwargs):
+        self.frame = tk.Frame(master, bg=DARK_BG)
+        self.frame.pack(fill='x', padx=2, pady=2)
+        
+        tk.Spinbox.__init__(self, self.frame, **kwargs)
+        self.configure(
+            bd=0,
+            bg=FIELD_BG,
+            fg=TEXT_COLOR,
+            insertbackground=TEXT_COLOR,
+            highlightthickness=0,
+            font=('Segoe UI', 11),
+            buttonbackground=FIELD_BG,
+            buttoncursor='hand2'
+        )
+        self.pack(fill='x', ipady=6)
+
+# Add this helper class for rounded buttons
+class RoundedButton(tk.Button):
+    """Custom Button widget with rounded corners"""
+    def __init__(self, master=None, **kwargs):
+        tk.Button.__init__(self, master, **kwargs)
+        self.configure(
+            bd=0,
+            relief='flat',
+            bg=ACCENT_COLOR,
+            fg=TEXT_COLOR,
+            activebackground='#1a85d6',  # Lighter accent color
+            activeforeground=TEXT_COLOR,
+            cursor='hand2',
+            padx=16,
+            pady=8,
+            font=('Segoe UI', 10)
+        )
+
+        # Bind hover events
+        self.bind('<Enter>', lambda e: self.configure(bg='#1a85d6'))
+        self.bind('<Leave>', lambda e: self.configure(bg=ACCENT_COLOR))
+
 def check_dependencies():
     """Check if all required dependencies are installed."""
     try:
@@ -65,8 +205,8 @@ def check_dependencies():
 # Set up the Tkinter window first
 root = tk.Tk()
 root.title("Sound Bite Generator")
-root.minsize(600, 300)  # Slightly larger minimum size
-root.configure(bg='#ffffff')  # Windows 11 white background
+root.state('zoomed')  # Makes the window full screen on Windows
+root.configure(bg=DARK_BG)
 
 # Check dependencies before importing them
 if not check_dependencies():
@@ -178,26 +318,32 @@ def midi_note_to_frequency(midi_note):
     return 440.0 * (2.0 ** ((midi_note - 69.0) / 12.0))
 
 # Function to generate sound files
-def generate_sounds(input_file, output_dir):
+def generate_sounds(input_file, output_dir, item_id):
     """Generate pitch-shifted sounds with user-defined settings."""
     try:
-        # Get all values
+        # Get all values first
         try:
             start_pitch = float(start_pitch_var.get())
             pitch_increment = float(pitch_increment_var.get())
-            num_files = int(num_files_var.get())
+            num_files = int(num_files_var.get())  # Get num_files from the variable
             output_format = output_format_var.get()
+            
             if num_files < 1:
                 raise ValueError("Number of files must be at least 1")
+                
         except ValueError as e:
             logger.error(f"Invalid values: {str(e)}")
             messagebox.showerror("Error", f"Please enter valid numbers: {str(e)}")
             return
             
+        # Update status to analyzing
+        update_file_status(item_id, 'ANALYZING')
+        
         # Get original filename without extension
         original_filename = os.path.splitext(os.path.basename(input_file))[0]
         
-        # Detect input pitch
+        # Load and process sound
+        sound = AudioSegment.from_file(input_file)
         input_freq = detect_pitch(input_file)
         input_note = frequency_to_midi_note(input_freq)
         semitone_adjustment = start_pitch - input_note
@@ -208,13 +354,18 @@ def generate_sounds(input_file, output_dir):
         logger.debug(f"Pitch increment: {pitch_increment} semitones")
         logger.debug(f"Number of files: {num_files}")
         logger.debug(f"Output format: {output_format}")
-        logger.debug(f"Original filename: {original_filename}")
         
-        sound = AudioSegment.from_file(input_file)
         os.makedirs(output_dir, exist_ok=True)
 
         # Generate sound bites
         for i in range(num_files):
+            if PROCESSING_CANCELLED:
+                update_file_status(item_id, 'CANCELLED')
+                return
+                
+            progress = int((i + 1) / num_files * 100)
+            update_file_status(item_id, 'CONVERTING', progress)
+            
             semitone_increase = (i * pitch_increment) + semitone_adjustment
             new_sound = change_pitch(sound, semitone_increase)
             output_file = os.path.join(output_dir, f"{original_filename}_sound_{i+1:03d}.{output_format}")
@@ -234,13 +385,11 @@ def generate_sounds(input_file, output_dir):
             else:  # WAV
                 new_sound.export(output_file, format="wav")
             
-            # Update progress
-            if status_label:
-                update_status(f"Generating file {i+1} of {num_files}...")
-            
+        update_file_status(item_id, 'COMPLETED', 100)
         return output_dir
     except Exception as e:
         logger.error(f"Error in generate_sounds: {str(e)}", exc_info=True)
+        update_file_status(item_id, 'ERROR')
         raise
 
 # Callback for the "Select File" button
@@ -254,35 +403,52 @@ def select_file():
 
 # Callback for the "Generate" button
 def generate():
-    input_file = input_file_var.get()
+    global PROCESSING_CANCELLED
+    PROCESSING_CANCELLED = False
+    
+    if not selected_files:
+        logger.error("No files selected")
+        messagebox.showerror("Error", "Please select at least one input file.")
+        return
+
     output_dir = output_dir_var.get()
-
-    logger.debug(f"Input file path: {input_file}")
-    logger.debug(f"Output directory: {output_dir}")
-
-    if not input_file:
-        logger.error("No input file selected")
-        messagebox.showerror("Error", "Please select an input sound file.")
-        return
-
-    if not os.path.exists(input_file):
-        logger.error(f"Input file does not exist: {input_file}")
-        messagebox.showerror("Error", f"Input file not found:\n{input_file}")
-        return
-
     if not output_dir:
         logger.error("No output directory specified")
         messagebox.showerror("Error", "Please select an output directory.")
         return
 
+    # Enable cancel button
+    for widget in root.winfo_children():
+        if isinstance(widget, tk.Button) and widget['text'] == "Cancel Processing":
+            widget.configure(state='normal')
+
     try:
-        num_files = int(num_files_var.get())  # Get the actual number of files
-        logger.debug("Attempting to read input file...")
-        generate_sounds(input_file, output_dir)
-        messagebox.showinfo("Success", f"{num_files} sound files generated in:\n{output_dir}")
+        total_files = 0
+        for i, (input_file, _) in enumerate(selected_files, 1):
+            if PROCESSING_CANCELLED:
+                messagebox.showinfo("Cancelled", "Processing has been cancelled.")
+                break
+
+            item_id = files_treeview.get_children()[i-1]
+            
+            try:
+                generate_sounds(input_file, output_dir, item_id)
+            except Exception as e:
+                logger.error(f"Error processing {input_file}: {str(e)}")
+                update_file_status(item_id, 'ERROR')
+                messagebox.showerror("Error", f"Error processing {os.path.basename(input_file)}:\n{str(e)}")
+                
+        if total_files > 0 and not PROCESSING_CANCELLED:
+            messagebox.showinfo("Success", f"Generated {total_files} sound files in:\n{output_dir}")
     except Exception as e:
         logger.error(f"Error during generation: {str(e)}", exc_info=True)
         messagebox.showerror("Error", f"An error occurred:\n{str(e)}")
+    finally:
+        # Disable cancel button
+        for widget in root.winfo_children():
+            if isinstance(widget, tk.Button) and widget['text'] == "Cancel Processing":
+                widget.configure(state='disabled')
+        PROCESSING_CANCELLED = False
 
 # Callback for the "Select Output Directory" button
 def select_output_dir():
@@ -292,273 +458,180 @@ def select_output_dir():
 
 # Update the UI setup code
 def create_ui():
-    # Configure root window grid
-    root.grid_columnconfigure(0, weight=1)
-    root.grid_rowconfigure(0, weight=1)
+    # Create main container frame with padding
+    main_container = tk.Frame(root, bg=DARK_BG)
+    main_container.pack(fill='both', expand=True, padx=20, pady=20)
 
-    # Main frame with Windows 11 style background
-    main_frame = tk.Frame(root, padx=24, pady=24, bg='#ffffff')  # Windows 11 uses more whitespace
-    main_frame.grid(row=0, column=0, sticky='nsew')
-    main_frame.grid_columnconfigure(0, weight=1)
-    main_frame.grid_rowconfigure(3, weight=1)
+    # Input Files section
+    files_section = tk.LabelFrame(main_container, text="Input Files", bg=DARK_BG, fg=TEXT_COLOR, font=('Segoe UI', 11))
+    files_section.pack(fill='x', padx=10, pady=(0, 20))
 
-    # Windows 11 style button configuration
-    button_style = {
-        'bg': '#0067c0',  # Windows 11 blue
-        'fg': 'white',
-        'font': ('Segoe UI', 10),  # Windows 11 system font
-        'padx': 16,
-        'pady': 8,
-        'relief': 'flat',  # Flat design
-        'cursor': 'hand2',
-        'borderwidth': 0  # No border
-    }
+    # Treeview for files
+    tree_frame = tk.Frame(files_section, bg=DARK_BG)
+    tree_frame.pack(fill='x', padx=10, pady=10)
 
-    # Input file selection row
-    input_frame = tk.Frame(main_frame, bg='#ffffff')
-    input_frame.grid(row=0, column=0, sticky='ew', pady=(0, 16))
-    input_frame.grid_columnconfigure(1, weight=1)
-
-    tk.Label(
-        input_frame, 
-        text="Select Sound File:", 
-        font=('Segoe UI', 11),
-        bg='#ffffff',
-        fg='#202020'  # Dark gray text
-    ).grid(row=0, column=0, sticky='w', padx=(0, 12))
-    
-    entry_style = {
-        'font': ('Segoe UI', 11),
-        'relief': 'flat',
-        'bg': '#f5f5f5',  # Light gray background
-        'highlightthickness': 1,
-        'highlightbackground': '#e0e0e0',  # Border color
-        'highlightcolor': '#0067c0'  # Focus border color
-    }
-    
-    tk.Entry(
-        input_frame, 
-        textvariable=input_file_var,
-        **entry_style
-    ).grid(row=0, column=1, sticky='ew', padx=5, ipady=8)  # Added internal padding
-    
-    tk.Button(
-        input_frame, 
-        text="Browse", 
-        command=select_file, 
-        **button_style
-    ).grid(row=0, column=2, padx=(5, 0))
-
-    # Output directory row
-    output_frame = tk.Frame(main_frame, bg='#ffffff')
-    output_frame.grid(row=1, column=0, sticky='ew', pady=(0, 24))
-    output_frame.grid_columnconfigure(1, weight=1)
-
-    tk.Label(
-        output_frame, 
-        text="Output Directory:", 
-        font=('Segoe UI', 11),
-        bg='#ffffff',
-        fg='#202020'
-    ).grid(row=0, column=0, sticky='w', padx=(0, 12))
-    
-    tk.Entry(
-        output_frame, 
-        textvariable=output_dir_var,
-        **entry_style
-    ).grid(row=0, column=1, sticky='ew', padx=5, ipady=8)
-    
-    tk.Button(
-        output_frame, 
-        text="Browse", 
-        command=select_output_dir, 
-        **button_style
-    ).grid(row=0, column=2, padx=(5, 0))
-
-    # Add number of files control
-    num_files_frame = tk.Frame(main_frame, bg='#ffffff')
-    num_files_frame.grid(row=2, column=0, sticky='ew', pady=(0, 16))
-    num_files_frame.grid_columnconfigure(1, weight=1)
-
-    tk.Label(
-        num_files_frame, 
-        text="Number of Files:", 
-        font=('Segoe UI', 11),
-        bg='#ffffff',
-        fg='#202020'
-    ).grid(row=0, column=0, sticky='w', padx=(0, 12))
-    
-    num_files_spinbox = tk.Spinbox(
-        num_files_frame,
-        from_=1,
-        to=1000,
-        increment=1,
-        textvariable=num_files_var,
-        font=('Segoe UI', 11),
-        relief='flat',
-        bg='#f5f5f5',
-        highlightthickness=1,
-        highlightbackground='#e0e0e0',
-        highlightcolor='#0067c0',
-        width=10
+    # Style the treeview
+    style = ttk.Style()
+    style.configure(
+        "Custom.Treeview",
+        background=FIELD_BG,
+        foreground=TEXT_COLOR,
+        fieldbackground=FIELD_BG,
+        borderwidth=0
     )
-    num_files_spinbox.grid(row=0, column=1, sticky='w', padx=5, ipady=8)
+    style.configure(
+        "Custom.Treeview.Heading",
+        background=DARKER_BG,  # Dark background for headers
+        foreground=TEXT_COLOR,  # White text
+        relief="flat",
+        borderwidth=0
+    )
+    style.map(
+        "Custom.Treeview.Heading",
+        background=[('active', ACCENT_COLOR)],  # Blue highlight on hover
+        foreground=[('active', TEXT_COLOR)]
+    )
 
-    # Add format selection
-    format_frame = tk.Frame(main_frame, bg='#ffffff')
-    format_frame.grid(row=3, column=0, sticky='ew', pady=(0, 16))
-    format_frame.grid_columnconfigure(1, weight=1)
-
-    tk.Label(
-        format_frame, 
-        text="Output Format:", 
-        font=('Segoe UI', 11),
-        bg='#ffffff',
-        fg='#202020'
-    ).grid(row=0, column=0, sticky='w', padx=(0, 12))
+    # Create Treeview with scrollbar
+    global files_treeview
+    files_treeview = ttk.Treeview(
+        tree_frame,
+        columns=("file", "status", "progress"),
+        show="headings",
+        style="Custom.Treeview",
+        height=8
+    )
     
-    # Combobox for format selection
-    format_combo = ttk.Combobox(
+    files_treeview.heading("file", text="File")
+    files_treeview.heading("status", text="Status")
+    files_treeview.heading("progress", text="Progress")
+    
+    files_treeview.column("file", width=400)
+    files_treeview.column("status", width=100)
+    files_treeview.column("progress", width=100)
+    
+    scrollbar = ttk.Scrollbar(tree_frame, orient="vertical", command=files_treeview.yview)
+    files_treeview.configure(yscrollcommand=scrollbar.set)
+    
+    files_treeview.pack(side='left', fill='x', expand=True)
+    scrollbar.pack(side='right', fill='y')
+
+    # File buttons
+    button_frame = tk.Frame(files_section, bg=DARK_BG)
+    button_frame.pack(fill='x', padx=10, pady=10)
+    
+    # Container for centered buttons
+    center_frame = tk.Frame(button_frame, bg=DARK_BG)
+    center_frame.pack(expand=True)
+    
+    RoundedButton(center_frame, text="Add Files", command=add_files, **regular_button_style).pack(side='left', padx=5)
+    RoundedButton(center_frame, text="Remove Selected", command=remove_selected, **regular_button_style).pack(side='left', padx=5)
+    RoundedButton(center_frame, text="Clear All", command=clear_files, **regular_button_style).pack(side='left', padx=5)
+
+    # Settings section - standardize all input rows
+    settings_section = tk.LabelFrame(main_container, text="Settings", bg=DARK_BG, fg=TEXT_COLOR, font=('Segoe UI', 11))
+    settings_section.pack(fill='x', padx=10, pady=(0, 20))
+
+    # Function to create consistent input rows with visible labels
+    def create_input_row(parent, label_text, widget_creator):
+        frame = tk.Frame(parent, bg=DARK_BG)
+        frame.pack(fill='x', padx=10, pady=5)
+        
+        tk.Label(
+            frame,
+            text=label_text,
+            bg=DARK_BG,
+            fg=TEXT_COLOR,
+            font=('Segoe UI', 11),
+            width=25,
+            anchor='w'
+        ).pack(side='left')
+        
+        return frame  # Return the frame instead of a container
+
+    # Output Directory - special case for browse button
+    dir_frame = create_input_row(settings_section, "Output Directory:", None)
+    
+    # Entry that fills remaining space
+    RoundedEntry(
+        dir_frame,
+        textvariable=output_dir_var
+    ).pack(side='left', fill='x', expand=True, padx=(0, 10))
+    
+    # Browse button at the end
+    RoundedButton(
+        dir_frame,
+        text="Browse",
+        command=select_output_dir,
+        **regular_button_style
+    ).pack(side='right')
+
+    # Regular input rows
+    num_frame = create_input_row(settings_section, "Number of Files:", None)
+    RoundedSpinbox(
+        num_frame,
+        from_=1,
+        to=999,
+        textvariable=num_files_var,
+        width=10
+    ).pack(side='left')
+
+    format_frame = create_input_row(settings_section, "Output Format:", None)
+    ttk.Combobox(
         format_frame,
         textvariable=output_format_var,
         values=["wav", "mp3"],
         state="readonly",
-        font=('Segoe UI', 11),
-        width=9
-    )
-    format_combo.grid(row=0, column=1, sticky='w', padx=5, ipady=8)
+        width=8
+    ).pack(side='left')
 
-    # Style the combobox to match Windows 11
-    style = ttk.Style()
-    style.configure('TCombobox', 
-        background='#f5f5f5',
-        fieldbackground='#f5f5f5',
-        selectbackground='#0067c0',
-        selectforeground='white'
-    )
-
-    # Starting pitch control (moved to row 4)
-    start_pitch_frame = tk.Frame(main_frame, bg='#ffffff')
-    start_pitch_frame.grid(row=4, column=0, sticky='ew', pady=(0, 16))
-    start_pitch_frame.grid_columnconfigure(1, weight=1)
-
-    tk.Label(
-        start_pitch_frame, 
-        text="Starting Pitch (MIDI note):", 
-        font=('Segoe UI', 11),
-        bg='#ffffff',
-        fg='#202020'
-    ).grid(row=0, column=0, sticky='w', padx=(0, 12))
-    
-    start_pitch_spinbox = tk.Spinbox(
-        start_pitch_frame,
-        from_=24,  # Low C
-        to=96,     # High C
-        increment=1,
-        textvariable=start_pitch_var,
-        font=('Segoe UI', 11),
-        relief='flat',
-        bg='#f5f5f5',
-        highlightthickness=1,
-        highlightbackground='#e0e0e0',
-        highlightcolor='#0067c0',
-        width=10
-    )
-    start_pitch_spinbox.grid(row=0, column=1, sticky='w', padx=5, ipady=8)
-
-    # Pitch increment control (moved to row 5)
-    pitch_frame = tk.Frame(main_frame, bg='#ffffff')
-    pitch_frame.grid(row=5, column=0, sticky='ew', pady=(0, 16))
-    pitch_frame.grid_columnconfigure(1, weight=1)
-
-    tk.Label(
-        pitch_frame, 
-        text="Pitch Increment (semitones):", 
-        font=('Segoe UI', 11),
-        bg='#ffffff',
-        fg='#202020'
-    ).grid(row=0, column=0, sticky='w', padx=(0, 12))
-    
-    pitch_spinbox = tk.Spinbox(
+    pitch_frame = create_input_row(settings_section, "Starting Pitch (MIDI note):", None)
+    RoundedSpinbox(
         pitch_frame,
+        from_=0,
+        to=127,
+        textvariable=start_pitch_var,
+        width=10
+    ).pack(side='left')
+
+    increment_frame = create_input_row(settings_section, "Pitch Increment (semitones):", None)
+    RoundedSpinbox(
+        increment_frame,
         from_=0.1,
-        to=2.0,
+        to=12,
         increment=0.1,
         textvariable=pitch_increment_var,
-        font=('Segoe UI', 11),
-        relief='flat',
-        bg='#f5f5f5',
-        highlightthickness=1,
-        highlightbackground='#e0e0e0',
-        highlightcolor='#0067c0',
         width=10
-    )
-    pitch_spinbox.grid(row=0, column=1, sticky='w', padx=5, ipady=8)
+    ).pack(side='left')
 
-    # Preview buttons frame (moved to row 6)
-    preview_frame = tk.Frame(main_frame, bg='#ffffff')
-    preview_frame.grid(row=6, column=0, pady=(0, 16))
+    # Preview section
+    preview_frame = tk.Frame(main_container, bg=DARK_BG)
+    preview_frame.pack(fill='x', pady=10)
+    
+    preview_center = tk.Frame(preview_frame, bg=DARK_BG)
+    preview_center.pack(expand=True)
+    
+    RoundedButton(preview_center, text="Preview Lowest", command=lambda: preview_pitch("lowest"), **regular_button_style).pack(side='left', padx=5)
+    RoundedButton(preview_center, text="Preview Highest", command=lambda: preview_pitch("highest"), **regular_button_style).pack(side='left', padx=5)
 
-    preview_button_style = button_style.copy()
-    preview_button_style['bg'] = '#0078d4'  # Slightly lighter blue
-
-    tk.Button(
-        preview_frame,
-        text="Preview Lowest",
-        command=lambda: preview_pitch("lowest"),
-        **preview_button_style
-    ).grid(row=0, column=0, padx=5)
-
-    tk.Button(
-        preview_frame,
-        text="Preview Highest",
-        command=lambda: preview_pitch("highest"),
-        **preview_button_style
-    ).grid(row=0, column=1, padx=5)
-
-    # Generate button (moved to row 7)
-    generate_button = tk.Button(
-        main_frame,
+    # Center the generate button
+    generate_frame = tk.Frame(main_container, bg=DARK_BG)
+    generate_frame.pack(fill='x', pady=20)
+    
+    generate_center = tk.Frame(generate_frame, bg=DARK_BG)
+    generate_center.pack(expand=True)
+    
+    RoundedButton(
+        generate_center,
         text="Generate Sound Bites",
         command=generate,
-        bg='#0067c0',
-        fg='white',
-        font=('Segoe UI', 11, 'bold'),
-        padx=32,
-        pady=12,
-        relief='flat',
-        cursor='hand2',
-        borderwidth=0
-    )
-    generate_button.grid(row=7, column=0, pady=(0, 16))
+        **large_button_style
+    ).pack()
 
-    # Status label (moved to row 8)
+    # Status label
     global status_label
-    status_label = tk.Label(
-        main_frame, 
-        text="", 
-        font=('Segoe UI', 11),
-        bg='#ffffff',
-        fg='#202020'
-    )
-    status_label.grid(row=8, column=0)
-
-    # Add hover effects for buttons
-    def on_enter(e):
-        e.widget['bg'] = '#0078d4'  # Lighter blue on hover
-
-    def on_leave(e):
-        e.widget['bg'] = '#0067c0'  # Return to original blue
-
-    # Bind hover events to all buttons
-    for widget in main_frame.winfo_children():
-        if isinstance(widget, tk.Button):
-            widget.bind("<Enter>", on_enter)
-            widget.bind("<Leave>", on_leave)
-        for child in widget.winfo_children():
-            if isinstance(child, tk.Button):
-                child.bind("<Enter>", on_enter)
-                child.bind("<Leave>", on_leave)
+    status_label = tk.Label(main_container, text="", bg=DARK_BG, fg=TEXT_COLOR, font=('Segoe UI', 11))
+    status_label.pack(pady=10)
 
 # Initialize variables
 input_file_var = tk.StringVar()
@@ -566,43 +639,57 @@ output_dir_var = tk.StringVar()
 status_label = None
 pitch_increment_var = tk.StringVar(value="0.5")  # Default increment
 start_pitch_var = tk.StringVar(value="60")  # Default to middle C (MIDI note 60)
-num_files_var = tk.StringVar(value="100")  # Default number of files
+num_files_var = tk.StringVar(value="100")  # Default to 100 files
 output_format_var = tk.StringVar(value="wav")  # Default to WAV
+start_file_var = tk.StringVar(value="1")  # Default start file number
+end_file_var = tk.StringVar(value="100")  # Default end file number
+selected_files = []  # List to store file paths
 
-# Create the UI
-create_ui()
+def add_files():
+    """Add files to the list."""
+    files = filedialog.askopenfilenames(
+        title="Select Sound Files",
+        filetypes=[("Audio Files", "*.wav *.mp3 *.ogg")]
+    )
+    for file in files:
+        if file not in [item[0] for item in selected_files]:
+            selected_files.append((file, "Queued..."))
+            files_treeview.insert('', 'end', values=(os.path.basename(file), "Queued..."))
 
-# Update status function with Windows 11 colors
-def update_status(message, is_error=False):
+def remove_selected():
+    """Remove selected files from the list."""
+    selection = files_treeview.selection()
+    for item in reversed(selection):
+        index = files_treeview.index(item)
+        selected_files.pop(index)
+        files_treeview.delete(item)
+
+def clear_files():
+    """Clear all files from the list."""
+    selected_files.clear()
+    for item in files_treeview.get_children():
+        files_treeview.delete(item)
+
+def cancel_processing():
+    """Cancel the file processing."""
+    global PROCESSING_CANCELLED
+    PROCESSING_CANCELLED = True
     if status_label:
-        status_label.config(
-            text=message,
-            fg='#c42b1c' if is_error else '#0067c0'  # Windows 11 red for errors, blue for success
-        )
-    root.update()
-
-# Update generate function to show progress
-def generate():
-    if not input_file_var.get():
-        update_status("Please select an input file", True)
-        return
-    if not output_dir_var.get():
-        update_status("Please select an output directory", True)
-        return
-    
-    try:
-        update_status("Generating sound bites...")
-        # Your existing generate code here
-        update_status("Successfully generated 100 sound files!")
-    except Exception as e:
-        update_status(f"Error: {str(e)}", True)
+        update_status("Cancelling processing...")
 
 def preview_pitch(semitones):
     """Preview the pitch-shifted sound."""
     try:
-        input_file = input_file_var.get()
-        if not input_file or not os.path.exists(input_file):
-            messagebox.showerror("Error", "Please select an input file first")
+        # Get selected file from listbox
+        selection = files_treeview.curselection()
+        if not selection:
+            messagebox.showerror("Error", "Please select a file from the list to preview")
+            return
+            
+        input_file = selected_files[selection[0]][0]
+        
+        if not os.path.exists(input_file):
+            messagebox.showerror("Error", "Selected file not found")
             return
             
         # Get all values
@@ -610,8 +697,10 @@ def preview_pitch(semitones):
             start_pitch = float(start_pitch_var.get())
             pitch_increment = float(pitch_increment_var.get())
             num_files = int(num_files_var.get())
+            
             if num_files < 1:
                 raise ValueError("Number of files must be at least 1")
+                
         except ValueError as e:
             messagebox.showerror("Error", f"Invalid values: {str(e)}")
             return
@@ -645,5 +734,31 @@ def preview_pitch(semitones):
     except Exception as e:
         logger.error(f"Error in preview: {str(e)}", exc_info=True)
         messagebox.showerror("Error", f"Preview failed: {str(e)}")
+
+def update_file_status(item_id, status_type, progress=None):
+    """Update the status and progress of a file in the treeview"""
+    status = STATUS_TYPES[status_type]
+    progress_text = f"{progress}%" if progress is not None else ""
+    
+    files_treeview.set(item_id, "status", status['text'])
+    files_treeview.set(item_id, "progress", progress_text)
+    
+    # Update the item's tag for color
+    files_treeview.tag_configure(status_type, foreground=status['color'])
+    files_treeview.item(item_id, tags=(status_type,))
+    
+    root.update()
+
+# Create the UI
+create_ui()
+
+# Update status function with Windows 11 colors
+def update_status(message, is_error=False):
+    if status_label:
+        status_label.config(
+            text=message,
+            fg='#c42b1c' if is_error else '#0067c0'  # Windows 11 red for errors, blue for success
+        )
+    root.update()
 
 root.mainloop()

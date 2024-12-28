@@ -79,6 +79,16 @@ label_style = {
 
 # Add at the top with other variables
 PROCESSING_CANCELLED = False
+selected_files = []  # Store selected files
+files_treeview = None  # Will be assigned in create_ui
+status_label = None  # Will be assigned in create_ui
+
+# Variables for settings
+output_dir_var = tk.StringVar()
+num_files_var = tk.StringVar(value="100")  # Default value
+output_format_var = tk.StringVar(value="wav")  # Default value
+start_pitch_var = tk.StringVar(value="60")  # Default value
+pitch_increment_var = tk.StringVar(value="0.5")  # Default value
 
 def create_round_rectangle(canvas, x1, y1, x2, y2, radius=25, **kwargs):
     """Create a rounded rectangle on a canvas."""
@@ -646,26 +656,27 @@ end_file_var = tk.StringVar(value="100")  # Default end file number
 selected_files = []  # List to store file paths
 
 def add_files():
-    """Add files to the list."""
+    """Callback for Add Files button"""
     files = filedialog.askopenfilenames(
         title="Select Sound Files",
         filetypes=[("Audio Files", "*.wav *.mp3 *.ogg")]
     )
-    for file in files:
-        if file not in [item[0] for item in selected_files]:
-            selected_files.append((file, "Queued..."))
-            files_treeview.insert('', 'end', values=(os.path.basename(file), "Queued..."))
+    if files:
+        for file in files:
+            if file not in [f[0] for f in selected_files]:
+                selected_files.append((file, "Queued..."))
+                files_treeview.insert('', 'end', values=(os.path.basename(file), "Queued...", ""))
 
 def remove_selected():
-    """Remove selected files from the list."""
-    selection = files_treeview.selection()
-    for item in reversed(selection):
-        index = files_treeview.index(item)
-        selected_files.pop(index)
+    """Callback for Remove Selected button"""
+    selected = files_treeview.selection()
+    for item in selected:
+        item_values = files_treeview.item(item)['values']
+        selected_files[:] = [f for f in selected_files if os.path.basename(f[0]) != item_values[0]]
         files_treeview.delete(item)
 
 def clear_files():
-    """Clear all files from the list."""
+    """Callback for Clear All button"""
     selected_files.clear()
     for item in files_treeview.get_children():
         files_treeview.delete(item)
@@ -677,77 +688,47 @@ def cancel_processing():
     if status_label:
         update_status("Cancelling processing...")
 
-def preview_pitch(semitones):
-    """Preview the pitch-shifted sound."""
+def preview_pitch(position):
+    """Preview the pitch-shifted sound"""
+    if not selected_files:
+        messagebox.showwarning("Warning", "Please select at least one input file.")
+        return
+        
     try:
-        # Get selected file from listbox
-        selection = files_treeview.curselection()
-        if not selection:
-            messagebox.showerror("Error", "Please select a file from the list to preview")
-            return
-            
-        input_file = selected_files[selection[0]][0]
-        
-        if not os.path.exists(input_file):
-            messagebox.showerror("Error", "Selected file not found")
-            return
-            
-        # Get all values
-        try:
-            start_pitch = float(start_pitch_var.get())
-            pitch_increment = float(pitch_increment_var.get())
-            num_files = int(num_files_var.get())
-            
-            if num_files < 1:
-                raise ValueError("Number of files must be at least 1")
-                
-        except ValueError as e:
-            messagebox.showerror("Error", f"Invalid values: {str(e)}")
-            return
-            
-        # Load and process sound
+        input_file = selected_files[0][0]  # Use first file for preview
         sound = AudioSegment.from_file(input_file)
-        input_freq = detect_pitch(input_file)
-        input_note = frequency_to_midi_note(input_freq)
-        semitone_adjustment = start_pitch - input_note
         
-        # Calculate final adjustment
-        if semitones == "highest":
-            semitone_increase = ((num_files - 1) * pitch_increment) + semitone_adjustment
-        else:  # lowest
-            semitone_increase = semitone_adjustment
-            
-        # Generate preview
-        new_sound = change_pitch(sound, semitone_increase)
+        if position == "lowest":
+            semitones = float(start_pitch_var.get()) - frequency_to_midi_note(detect_pitch(input_file))
+        else:  # highest
+            num_files = int(num_files_var.get())
+            pitch_increment = float(pitch_increment_var.get())
+            semitones = (float(start_pitch_var.get()) - frequency_to_midi_note(detect_pitch(input_file)) + 
+                        (num_files - 1) * pitch_increment)
         
-        # Play the preview (first 2 seconds)
-        preview_length = min(len(new_sound), 2000)
-        preview = new_sound[:preview_length]
-        preview.export("temp_preview.wav", format="wav")
+        preview = change_pitch(sound, semitones)
+        preview.export("preview.wav", format="wav")
         
+        # Play the preview
         if sys.platform == "win32":
-            os.startfile("temp_preview.wav")
+            os.startfile("preview.wav")
         else:
-            opener = "open" if sys.platform == "darwin" else "xdg-open"
-            subprocess.call([opener, "temp_preview.wav"])
+            subprocess.run(["xdg-open", "preview.wav"])
             
     except Exception as e:
         logger.error(f"Error in preview: {str(e)}", exc_info=True)
-        messagebox.showerror("Error", f"Preview failed: {str(e)}")
+        messagebox.showerror("Error", f"Error previewing sound:\n{str(e)}")
 
-def update_file_status(item_id, status_type, progress=None):
+def update_file_status(item_id, status, progress=None):
     """Update the status and progress of a file in the treeview"""
-    status = STATUS_TYPES[status_type]
-    progress_text = f"{progress}%" if progress is not None else ""
-    
-    files_treeview.set(item_id, "status", status['text'])
-    files_treeview.set(item_id, "progress", progress_text)
-    
-    # Update the item's tag for color
-    files_treeview.tag_configure(status_type, foreground=status['color'])
-    files_treeview.item(item_id, tags=(status_type,))
-    
-    root.update()
+    current_values = files_treeview.item(item_id)['values']
+    new_values = [
+        current_values[0],
+        STATUS_TYPES[status]['text'],
+        f"{progress}%" if progress is not None else ""
+    ]
+    files_treeview.item(item_id, values=new_values)
+    files_treeview.update()
 
 # Create the UI
 create_ui()

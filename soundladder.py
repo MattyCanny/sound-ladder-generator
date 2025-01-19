@@ -77,11 +77,23 @@ label_style = {
     'padx': 10
 }
 
-# Add at the top with other variables
-PROCESSING_CANCELLED = False
-selected_files = []  # Store selected files
-files_treeview = None  # Will be assigned in create_ui
-status_label = None  # Will be assigned in create_ui
+# Create the root window FIRST
+root = tk.Tk()
+root.title("Sound Bite Generator")
+root.state('zoomed')
+root.configure(bg=DARK_BG)
+
+# THEN create Tkinter variables
+output_dir_var = tk.StringVar()
+num_files_var = tk.StringVar(value="100")
+output_format_var = tk.StringVar(value="wav")
+start_pitch_var = tk.StringVar(value="60")
+pitch_increment_var = tk.StringVar(value="0.5")
+
+# Other global variables
+selected_files = []
+files_treeview = None
+status_label = None
 
 # Variables for settings
 output_dir_var = tk.StringVar()
@@ -211,12 +223,6 @@ def check_dependencies():
         logger.error(f"Unexpected error during dependency check: {str(e)}", exc_info=True)
         messagebox.showerror("Error", f"An unexpected error occurred:\n{str(e)}")
         return False
-
-# Set up the Tkinter window first
-root = tk.Tk()
-root.title("Sound Bite Generator")
-root.state('zoomed')  # Makes the window full screen on Windows
-root.configure(bg=DARK_BG)
 
 # Check dependencies before importing them
 if not check_dependencies():

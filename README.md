@@ -1,77 +1,95 @@
-# Sound Ladder Generator
+===============================
+    SOUND LADDER GENERATOR
+===============================
 
-A Python application that generates a series of pitch-shifted audio files, useful for vocal training, sound design, and music production.
+A Python application that generates a series of pitch-shifted audio files, useful for 
+vocal training, sound design, and music production.
 
-## Features
+------------------
+    FEATURES
+------------------
+* Generate customizable number of pitch-shifted variations of audio files
+* Support for WAV and MP3 input/output formats
+* Modern dark-themed graphical user interface
+* Customizable pitch increment and starting pitch
+* Preview lowest and highest pitch before generating
+* Batch processing support for multiple files
+* Progress tracking for each file
 
-- Generate 100 pitch-shifted variations of an input audio file
-- Support for WAV, MP3, and OGG input formats
-- Simple graphical user interface
-- Each output file increases by one semitone
+------------------
+   REQUIREMENTS
+------------------
+* Python 3.8 or higher
+* FFmpeg (required for audio processing)
+* Required Python packages (installed automatically):
+  - librosa
+  - numpy
+  - pydub
+  - resampy
 
-## Installation
+-------------------------
+   QUICK START (Windows)
+-------------------------
+1. Download the latest release
+2. Install FFmpeg:
+   - Download from FFmpeg Builds: https://github.com/BtbN/FFmpeg-Builds/releases
+   - Extract to C:\Program Files\ffmpeg
+3. Double-click launch_soundladder.bat
 
-1. Clone the repository:   ```bash
+------------------------
+   MANUAL INSTALLATION
+------------------------
+1. Clone the repository:
    git clone https://github.com/yourusername/sound-ladder-generator.git
-   cd sound-ladder-generator   ```
+   cd sound-ladder-generator
 
-2. Create a virtual environment (recommended):   ```bash
+2. Create a virtual environment:
    python -m venv venv
-   source venv/bin/activate  # On Windows, use: venv\Scripts\activate   ```
+   
+   Windows:
+   venv\Scripts\activate
+   
+   macOS/Linux:
+   source venv/bin/activate
 
-3. Install dependencies:   ```bash
-   pip install -r requirements.txt   ```
+3. Install dependencies:
+   pip install -r requirements.txt
 
-## Usage
+----------------------
+   INSTALLING FFMPEG
+----------------------
+Windows:
+1. Download FFmpeg from FFmpeg Builds (link above)
+2. Extract to C:\Program Files\ffmpeg
+3. The program will automatically find FFmpeg in this location
 
-1. Run the application:   ```bash
-   python soundladder.py   ```
+macOS:
+brew install ffmpeg
+
+Linux:
+sudo apt-get install ffmpeg
+
+--------------
+    USAGE
+--------------
+1. Launch the application using the provided shortcut or:
+   python soundladder.py
 
 2. Using the interface:
-   - Click "Browse" to select your input audio file
-   - Choose an output directory
-   - Click "Generate Sound Bites"
-   - Wait for the success message
+   * Click "Add Files" to select input audio files
+   * Choose an output directory
+   * Adjust settings:
+     - Number of files to generate
+     - Output format (WAV/MP3)
+     - Starting pitch (MIDI note)
+     - Pitch increment (semitones)
+   * Preview lowest/highest pitch (optional)
+   * Click "Generate Sound Bites"
+   * Monitor progress in the files list
 
-## Requirements
+--------------
+   LICENSE
+--------------
+This project is licensed under the MIT License - see the LICENSE file for details.
 
-- Python 3.6 or higher
-- pydub library
-- FFmpeg (required by pydub for MP3 and OGG support)
-
-## Installing FFmpeg
-
-#### Windows
-1. Download FFmpeg from [here](https://www.gyan.dev/ffmpeg/builds/)
-2. Extract the downloaded file
-3. Move the contents of the `bin` folder to `C:\Program Files\ffmpeg`
-4. Add to System PATH:
-   - Open "System Properties" (Windows key + X → System)
-   - Click "Advanced system settings"
-   - Click "Environment Variables"
-   - Under "System variables", select "Path"
-   - Click "Edit" → "New"
-   - Add `C:\Program Files\ffmpeg`
-   - Click "OK" on all windows
-
-#### macOS
-Run in terminal:
-`brew install ffmpeg`
-
-#### Linux
-Run in terminal:
-`sudo apt-get install ffmpeg`
-
-### Running the Program
-1. Download the latest release
-2. Run the application:
-   `python soundladder.py`
-3. Using the interface:
-   - Click "Browse" to select your input audio file
-   - Choose an output directory
-   - Click "Generate Sound Bites"
-   - Wait for the success message
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+===============================

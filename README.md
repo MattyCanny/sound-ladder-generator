@@ -1,6 +1,5 @@
-===============================
+
     SOUND LADDER GENERATOR
-===============================
 
 A Python application that generates a series of pitch-shifted audio files, useful for 
 vocal training, sound design, and music production.
